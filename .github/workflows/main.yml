@@ -9,6 +9,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: check
+        run: |
+          echo "${{ secrets.SERVER_USER }}"
+          echo "${{ secrets.SERVER_HOST }}"
+          echo "${{ secrets.SSH_PASSWORD }}"
       - name: Checkout code
         uses: actions/checkout@v3
 
