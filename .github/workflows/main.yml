@@ -29,7 +29,7 @@ jobs:
       - name: Deploy to server
         run: |
           echo "Deploying to server..."
-          sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete ./build/* {{secrets.SERVER_USER}}@${{ secrets.SERVER_HOST }}:/var/www/html/
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete ./build/* {{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/html/
         env:
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}  # 从 GitHub Secrets 获取密码
           SERVER_HOST: ${{ secrets.SERVER_HOST }}  # 服务器地址
