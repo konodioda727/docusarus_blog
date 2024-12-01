@@ -18,7 +18,7 @@ jobs:
           node-version: '20'  # 选择 Node.js 版本
 
       - name: Install dependencies
-        run: npm ci
+        run: npm i
 
       - name: Build Docusaurus
         run: npm run build
