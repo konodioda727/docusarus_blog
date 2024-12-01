@@ -1,0 +1,36 @@
+name: Deploy Docusaurus
+
+on:
+  push:
+    branches:
+      - main  # 仅当 push 到 main 分支时执行部署
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'  # 选择 Node.js 版本
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Docusaurus
+        run: npm run build
+
+      - name: Install sshpass
+        run: sudo apt-get install sshpass  # 安装 sshpass
+
+      - name: Deploy to server
+        run: |
+          echo "Deploying to server..."
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete ./build/* {{secrets.SERVER_USER}}@${{ secrets.SERVER_HOST }}:/var/www/html/
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}  # 从 GitHub Secrets 获取密码
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}  # 服务器地址
+          SERVER_USER: ${{ secrets.SERVER_USER }}  # 服务器用户名
