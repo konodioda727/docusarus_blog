@@ -72,11 +72,17 @@ const config: Config = {
       items: [
         {
           type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
+          sidebarId: 'react_source',
           position: 'left',
-          label: '个人简介',
+          label: 'react 源码阅读',
         },
-        {to: '/blog', label: 'Blog', position: 'left'},
+        {
+          type: 'docSidebar',
+          sidebarId: 'about_me',
+          position: 'left',
+          label: '关于我',
+        },
+        {to: '/blog', label: '随笔', position: 'left'},
         {
           href: 'https://github.com/konodioda727',
           label: 'GitHub',
@@ -109,13 +115,13 @@ const config: Config = {
           title: '其他',
           items: [
             {
-              label: 'Blog',
+              label: '随笔',
               to: '/blog',
             }
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} My Project, Inc. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} KB-Blog, Inc. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

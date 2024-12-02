@@ -1,8 +1,37 @@
+---
+sidebar_position: 2
+---
 # React 工作流
 > 本篇文章仅讨论 React 触发构建以及更新 VDOM 的逻辑
 > 并不会详细讲解 diff 算法
 > 有关 diff 的讲解位于 [React-Reconcile](./React-Reconcile.md)
-React 工作流主入口是 `performSyncWorkOnRoot`
+
+## React 渲染流程
+作为一个开发者,得以窥探框架渲染过程的唯一契机就是性能监控面板
+
+我也很推荐在阅读源码前去翻看性能监控,查看框架到底做了哪些事情
+
+这比无头苍蝇的死磕源码要高效的多
+
+这是我观察 React 执行过程的流程:
+
+1. 首先随便打开一个项目（用`dev`模式，生产模式会被打包改名，不好辨认）
+
+2. `F12`打开控制台，打开【性能】面板
+
+3. 随便与页面交互一下，并用【性能】记录
+
+4. 得到结果大致如下：
+
+   ![image-20241020002613108](/Users/lawkaiqing/Library/Application Support/typora-user-images/image-20241020002613108.png)
+
+   其中绿色部分就是这个板块要研究的`React`渲染流程
+
+   从图中我们可以提取到渲染流程如下：
+
+   ![渲染流程（主要函数）](https://s2.loli.net/2024/10/20/GEJDxywBXAnm9Wz.png)
+
+   那我们顺着它往下走,从 `performSyncWorkOnRoot` 入手,观察 React 究竟干了什么 
 
 ## performSyncWorkOnRoot
 
@@ -64,9 +93,10 @@ ensureRootIsScheduled();
 
 其中`shouldTimeSlice`就是是否应该启用`Concurrent`模式开启时间切片的意思
 
-接着进入到渲染函数`renderRoot`
+接着进入到渲染函数`renderRoot`,最后`ensureRootIsScheduled`
 
-最后`ensureRootIsScheduled`
+`renderRootSync` 很好判断,即为渲染的主入口,然而 `ensureRootIsScheduled` 就没有这么容易揣测
+从名称看,是确保 root 被调度,那么这里的 root 指代的是什么呢?为什么需要这个函数呢? 我们带着问题继续往下查看
 
 ## ensureRootIsScheduled
 简化后代码如下:
@@ -102,11 +132,17 @@ ensureRootIsScheduled();
     scheduleTaskForRootDuringMicrotask(root, now());
   }
 ```
-该函数会维护一个**root 列表**, 并为列表中任务增加调度.
-如果有任务调度存在,则复用当前调度
-`scheduleTaskForRootDuringMicrotask` 以及 `scheduleImmediateTask` 为具体调度函数
+该函数功能很简单, 会维护一个**root 列表**, 并为列表中任务增加调度.
+
+那么这也从侧面说明, 该函数中的 root 不可能为整棵fiber树的root
+
+实际上在这里,root就代表一个树节点, **react 每次调度树时都需要检查节点是否已经被调度, 如果有任务调度存在,则复用当前调度**
+
+调度又分为`scheduleTaskForRootDuringMicrotask` 以及 `scheduleImmediateTask` 为具体调度函数:
+
 在同步模式下,二者均只给 root 打上 `syncLane`
-具体如下:
+
+`schduleTaskForRootDuringMicrotask` 主要源码如下:
 ```jsx
   if (
     // 如果 lane 为同步
@@ -127,6 +163,59 @@ ensureRootIsScheduled();
     return SyncLane;
   }
 ```
+那么为什么需要 `ensureRootIsScheduled` 呢?
+或者说这个函数有什么作用吗?
+
+Andrew 的 commit 注释如下:
+> When React receives new input (via `setState`, a Suspense promise
+resolution, and so on), it needs to ensure there's a rendering task
+associated with the update. Most of this happens
+`ensureRootIsScheduled`.
+> If a single event contains multiple updates, we end up running the
+scheduling code once per update. But this is wasteful because we really
+only need to run it once, at the end of the event (or in the case of
+flushSync, at the end of the scope function's execution).
+> So this PR moves the scheduling logic to happen in a microtask instead.
+In some cases, we will force it run earlier than that, like for
+`flushSync`, but since updates are batched by default, it will almost
+always happen in the microtask. Even for discrete updates.
+
+> In production, this should have no observable behavior difference. In a
+testing environment that uses `act`, this should also not have a
+behavior difference because React will push these tasks to an internal
+`act` queue.
+
+> However, tests that do not use `act` and do not simulate an actual
+production environment (like an e2e test) may be affected. For example,
+before this change, if a test were to call `setState` outside of `act`
+and then immediately call `jest.runAllTimers()`, the update would be
+synchronously applied. After this change, that will no longer work
+because the rendering task (a timer, in this case) isn't scheduled until
+after the microtask queue has run.
+> I don't expect this to be an issue in practice because most people do
+not write their tests this way. They either use `act`, or they write
+e2e-style tests.
+> The biggest exception has been... our own internal test suite. Until
+recently, many of our tests were written in a way that accidentally
+relied on the updates being scheduled synchronously. Over the past few
+weeks, @tyao1 and I have gradually converted the test suite to use a new
+set of testing helpers that are resilient to this implementation detail.
+(There are also some old Relay tests that were written in the style of
+React's internal test suite. Those will need to be fixed, too.)
+> The larger motivation behind this change, aside from a minor performance
+improvement, is we intend to use this new microtask to perform
+additional logic that doesn't yet exist. Like inferring the priority of
+a custom event.
+
+翻译过来大概意思就是在 React 中有多种方式会触发组件更新，例如通过 setState、Suspense 的 promise 解析等。每当发生这些更新时，React 需要确保有一个 渲染任务 与更新相关联，这个渲染任务最终会被执行。ensureRootIsScheduled 是用来保证这个渲染任务被正确调度的函数。
+
+原来的架构中,多个更新任务的重复调度：如果一个事件（例如用户点击、输入等）包含多个状态更新，React 会针对每次更新都执行一次调度逻辑。这是浪费的，因为实际上我们只需要在事件的结束时（或 flushSync 调用结束时）执行一次调度任务，而不是每个 setState 调用都触发一次调度。
+
+这次采用 microtask 调用,确保在每个渲染任务的末尾调用更新即可,提高性能
+
+不可谓不妙啊
+
+理解了这个函数的作用后,我们继续看看 renderRootSync 这个主要函数入口
 
 ## renderRootSync
 
@@ -170,6 +259,9 @@ ensureRootIsScheduled();
       finishQueueingConcurrentUpdates();
     }
 ```
+实际上,主体逻辑只有一行: `workLoop`
+
+那继续顺藤摸瓜, workLoop 在干什么呢?
 
 ## workloop/performUnitOfWork
 
@@ -184,7 +276,7 @@ function workLoopSync() {
 }
 ```
 
-`performUnitOfWork`中可以看到两个在引言中熟悉的身影:`beginWork`和`completeWork`
+`performUnitOfWork`中可以看到两个在[前备知识](../intro.md)中熟悉的身影:`beginWork`和`completeWork`
 
 从此处开始，更新粒度深入为`fiberNode`级别
 
@@ -212,6 +304,8 @@ function workLoopSync() {
     workInProgress = next;
   }
 ```
+那么 `beginWork`又在干什么呢
+咱们继续向下深挖
 
 ## beginWork
 ```tsx
@@ -311,9 +405,10 @@ if (current !== null) {
 > 这也是如下代码产生的原因
 > `current !== null && !didReceiveUpdate`
 > 当 current 存在,并且没有收到更新时,则代表需要 bailout
+> 
 简单来说，就是判断组件的新旧`prop`有没有更新，如果有更新，则根据组件的类型进入不同的分支
 
-一般来说，我们的组件是`FunctionComponent`，但是如果用`React.memo`包一下，就会被当作是`MemoComponent`,这二者还是有很大不同的
+一般来说，我们的组件是`FunctionComponent`，但是如果用`React.memo`包一下，就会被当作是`MemoComponent`,这二者还是有很大不同的,我们待会就会讨论到这点
 
 > ***unresolvedProps***
 > `unresolvedProps`简而言之，是传递给组件的原始属性，而 `resolvedProps` 是经过可能的默认属性解析后的属性集合。
@@ -402,16 +497,15 @@ if (current !== null) {
   return children;
 ```
 
-finishRenderingHook 负责清理工作,
-会将 `ReactSharedInternals.H` 置空
-而在使用 hook 时,回首先检查这个变量
-因此在 组件以及 外调用会产生报错
-至于为什么必须在组件内使用 hook
-可以参考 [React Hooks](./React-Hooks.md)
+finishRenderingHook 负责清理工作,会将 `ReactSharedInternals.H` 置空
 
-该函数执行子组件,并调用了另一个重要函数 `reconcileChildren`
-递归更新其子组件
-会在 [React Reconcile](./React-Reconcile.md)
+而在使用 hook 时,回首先检查这个变量, 因此在组件以及 hook 外调用会产生报错
+
+至于为什么必须在组件内使用 hook, 可以参考 [React Hooks](./React-Hooks.md)
+
+该函数执行子组件并返回,为后续的 [reconcile](./React-Reconcile.md) 做准备
+
+在这一板块,我们先不管,我们先看 memo 是怎么处理的
 
 ## updateMemoComponent
 把 memo 放在 function 之后是我的小巧思
@@ -488,8 +582,10 @@ finishRenderingHook 负责清理工作,
 }
 ```
 可以看到,主要逻辑分为两支, simpleMemoComponent 以及 MemoComponent
-我们来看区分的条件是什么:
-`isSimpleFunctionComponent`如下:
+
+区分的条件就是`isSimpleFunctionComponent`
+
+它的源码如下:
 ```jsx
 function shouldConstruct(Component: Function) {
   const prototype = Component.prototype;
@@ -509,7 +605,7 @@ export function isSimpleFunctionComponent(type: any): boolean {
 - 用户进行 memoize 的时候，没有传递用于自定义逻辑的 compare 函数
 - 组件函数上面没有定义 defaultProps。
 
-如果满足，我们就直接把当前的 workInProgress 的类型修正为 SimpleMemoComponent 类型，同时 workInProgress.type 指向组件函数本身。最后，从修正后的 workInProgress 重新开始，对它进行begin-work - 即调用 updateSimpleMemoComponent() helper 函数。如果不是,者进行 updateMemoComponent 
+如果满足，我们就直接把当前的 workInProgress 的类型修正为 SimpleMemoComponent 类型，同时 workInProgress.type 指向组件函数本身。最后，从修正后的 workInProgress 重新开始，对它进行begin-work - 即调用 updateSimpleMemoComponent() helper 函数。如果不是,则进行 updateMemoComponent 
 ### updateSimpleComponent
 updateSimpleMemoComponent() 的源码架构如下：
 ```jsx
@@ -618,8 +714,8 @@ flowchart TD
   A{"如果 compare 逻辑判断组件逻辑没变"};
   B["Bailout"];
   C["创建新 wipNode,进入原本函数组件更新流程"];
-  A --> B;
-  A --> C;
+  A --> |逻辑没变|B;
+  A --> |逻辑更改|C;
 ```
 - 如果 compare 逻辑验证组件与之前相同,则 bailout
 - 否则 创建新 workInProgress 节点
@@ -641,6 +737,7 @@ flowchart TD
   C{workLoop: 进入工作循环,调用 performUnitOfWork}
   CPlus[performUnitOfWork: 完成节点渲染]
   D[beginWork: reconcile 第一阶段,根据 props 更改 didReceiveUpdate,并调用不同更新函数]
+  D2[completeWork: beginWork递归完毕,没有子节点,标记节点执行完毕,向上回溯]
   E[updateMemoComponent]
   F[updateFunctionComponent]
   G[updateClassComponent ... ...]
@@ -649,8 +746,9 @@ flowchart TD
   A --> B;
   B --> C;
   C --> CPlus;
-  CPlus --> C;
   CPlus --> D;
+  CPlus --> D2;
+  D2 --> C;
   D --> E;
   D --> F;
   D --> G;
