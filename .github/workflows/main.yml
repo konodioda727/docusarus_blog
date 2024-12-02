@@ -30,6 +30,11 @@ jobs:
 
       - name: Install sshpass
         run: sudo apt-get install sshpass  # 安装 sshpass
+        
+      - name: Accept host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H 43.154.111.77 >> ~/.ssh/known_hosts
 
       - name: Deploy to server
         run: |
