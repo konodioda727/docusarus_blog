@@ -1,7 +1,6 @@
 ---
 slug: 并行计算4
 title: 并行计算 第四章复习提纲
-authors: [kaiqingliu]
 tags: [并行计算]
 ---
 

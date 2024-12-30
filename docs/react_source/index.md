@@ -29,4 +29,4 @@ React 的原理以及思想其实很简单,在这篇文章中,我将其分为:
 以下是版块传送门:
 - [React fiber](./fiber/renderPhase/index.md)
 - [React Hooks](./hooks/index.md)
-- [React algo](./algo/index.md)
+- [React algo](./algo/React-Reconcile.md)

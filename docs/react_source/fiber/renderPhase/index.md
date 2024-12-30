@@ -133,7 +133,7 @@ function workLoopSync() {
 }
 ```
 
-`performUnitOfWork`中可以看到两个在[前备知识](../intro/index.md)中熟悉的身影:`beginWork`和`completeWork`
+`performUnitOfWork`中可以看到两个在[前备知识](../../../intro.md)中熟悉的身影:`beginWork`和`completeWork`
 
 从此处开始，更新粒度深入为`fiberNode`级别
 

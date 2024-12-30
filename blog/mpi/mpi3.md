@@ -1,7 +1,6 @@
 ---
 slug: 并行计算3
 title: 并行计算 第三章复习提纲
-authors: [kaiqingliu]
 tags: [并行计算]
 ---
 

@@ -1,7 +1,6 @@
 ---
 slug: index
 title: 并行计算 第二章复习提纲
-authors: [kaiqingliu]
 tags: [并行计算]
 ---
 
