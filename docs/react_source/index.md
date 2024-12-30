@@ -14,8 +14,19 @@ sidebar_position: 1
 
 基于以上原因,本人查阅了很久的源码,最终产出了这一系列文章
 
+本篇文章为开篇,介绍 react 的由来以及其中知名架构的起源,希望能帮助大家更好地理解 react
+
+## React 简介
+React 的原理以及思想其实很简单,在这篇文章中,我将其分为: 
+- 为什么会有 React 
+- React 干了什么
+- 为什么会有 VDOM
+- 为什么会有 Fiber
+- 为什么会有 Scheduler
+几个部分展开
+
+
 以下是版块传送门:
-- [React 前备知识](../intro.md)
-- [React 渲染流程](./React-CreateVDOM.md)
-- [React Hooks](./React-Hooks.md)
-- [React Reconcile](./React-Reconcile.md)
+- [React fiber](./fiber/renderPhase/index.md)
+- [React Hooks](./hooks/index.md)
+- [React algo](./algo/index.md)
