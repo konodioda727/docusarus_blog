@@ -3,6 +3,11 @@
   permalink: /mpi
   description: 沟槽的并行计算
 
+操作系统:
+  label: 操作系统
+  permalink: /os
+  description: 操作系统啊啊啊啊啊啊
+
 docusaurus:
   label: Docusaurus
   permalink: /docusaurus
